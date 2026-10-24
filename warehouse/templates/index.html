@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relief-Relay Warehouse</title>
+<style>
+:root{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:#142934;background:#eef3f8}*{box-sizing:border-box}body{margin:0}header{background:#123a54;color:#fff;padding:24px max(18px,calc((100vw - 1100px)/2))}header h1{margin:0;font-size:29px}header p{margin:5px 0;color:#bed8e8}main{max-width:1100px;margin:22px auto;padding:0 16px}.grid{display:grid;grid-template-columns: 1fr 1fr;gap:16px}@media(max-width:750px){.grid{grid-template-columns:1fr}}.card{background:#fff;border:1px solid #d8e4ec;border-radius:14px;padding:18px;margin-bottom:18px;box-shadow:0 4px 16px #2447610e}h2{font-size:18px;margin:0 0 10px}h3{font-size:17px;margin:0 0 7px}.muted{color:#647785;font-size:13px}.hint{background:#fff2d5;border:1px solid #ead4a1;padding:11px;border-radius:9px;font-size:13px}.pill{padding:4px 9px;background:#eaf2fb;border-radius:16px;font-size:12px;font-weight:750;color:#1d597a}.row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.chip{padding:5px 8px;border-radius:8px;background:#edf2f6;margin:3px;display:inline-block;font-size:12px}button{border:0;border-radius:8px;background:#126187;color:#fff;padding:9px 13px;font-weight:700;cursor:pointer}button.secondary{background:#dcecf4;color:#135476}button:disabled{opacity:.5;cursor:not-allowed}input{border:1px solid #b7cbd6;border-radius:8px;padding:9px;font:inherit;width:100%}code{font-size:12px;overflow-wrap:anywhere}pre{white-space:pre-wrap}#message{min-height:22px;font-size:13px}#requests{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}.req{border:1px solid #d8e4ec;border-radius:12px;padding:15px;background:#fff}.req p{margin:6px 0}.ok{color:#14713b}.error{color:#b42622}.switch{display:flex;gap:7px;align-items:center;margin:10px 0;font-size:13px}.switch input{width:auto}small{color:#728391}
+</style></head><body><header><h1>RELIEF-RELAY</h1><p>Offline-first warehouse coordination · Local prototype</p><p style="margin-top:8px"><a href="/driver" style="color:#c4eaff">Open driver page →</a></p></header>
+<main><div class="hint"><b>Prototype safety note:</b> Use demonstration data only; medicine notes are sensitive and this prototype is not encrypted. All names/IDs are demonstration data. Allocations, weights and tolerances are illustrative. A radio transmission is not proof of delivery. Simulated readings are labeled and should never be presented as real sensor results.</div>
+<div class="grid" style="margin-top:18px">
+<section class="card"><h2>Incoming requests</h2><p class="muted">Live from the LoRa receiver if connected. Otherwise use the simulation below.</p><div class="row"><strong id="request-count">0</strong><span class="pill">Auto refresh every 3s</span></div>
+<label for="sample"><small>Simulate one incoming request, bypassing radio</small></label><input id="sample" value="RR1|RDEMO002|YEL03|4|1|FLOOD|2|REGULAR|INHALER"/><button style="margin-top:8px" onclick="simulate()">SIMULATE incoming message</button></section>
+<section class="card"><h2>Packing weight station</h2><p id="reading">Waiting for weighing station</p><small>Connect a calibrated HX711 board via USB for physical readings. The demo option below intentionally bypasses the sensor.</small>
+<div class="row" style="margin-top:12px"><input style="max-width:180px" id="grams" type="number" min="0" max="10000" step="1" placeholder="Demo grams"/><button class="secondary" onclick="demoWeight()">SIMULATE weight</button></div></section></div>
+<section class="card"><h2>Warehouse inventory</h2><div id="inventory"></div><p class="muted">Stock is reserved when a kit is assigned. This pilot uses example item quantities.</p></section>
+<h2>Requests and packaging</h2><p id="message"></p><div id="requests"></div>
+<div class="card" style="margin-top:20px"><h2>How to demonstrate</h2><p class="muted">Phone saved request → Bluetooth Classic serial terminal → gateway ESP32 → LoRa → receiver ESP32 USB → dashboard. Assign kit → independently check items → weigh → verify → dispatch → mark delivered. Use separate simulated input if radio or scale hardware has not arrived.</p></div>
+</main><script>
+const $=id=>document.getElementById(id);
+let state={};
+function notice(txt,error=false){$('message').textContent=txt;$('message').className=error?'error':'ok'}
+async function post(path,data={}){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const j=await r.json();if(!r.ok){notice(j.error+(j.shortages?' '+JSON.stringify(j.shortages):''),true);return false}notice(j.note||'Updated successfully');refresh();return true}
+async function simulate(){await post('/api/demo',{message:$('sample').value.trim()})}
+async function demoWeight(){await post('/api/demo-weight',{grams:Number($('grams').value)})}
+async function assign(id){await post('/api/assign/'+encodeURIComponent(id))}
+async function verify(id){const checklist=confirm('Have you PHYSICALLY checked every item in this kit against the packing list? (Click Cancel if not.)');if(!checklist)return;await post('/api/verify/'+encodeURIComponent(id),{checklist_confirmed:true})}
+async function advance(id){await post('/api/advance/'+encodeURIComponent(id))}
+function esc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function kitLabels(kit){return Object.entries(kit).map(([k,v])=>`<span class="chip">${esc(state.items[k].name)} × ${v}</span>`).join('')}
+function refresh(){fetch('/api/state').then(r=>r.json()).then(s=>{
+ state=s;$('request-count').textContent=`${s.requests.length} total requests`;
+ $('inventory').innerHTML=Object.entries(s.inventory).map(([k,v])=>`<span class="chip">${esc(s.items[k].name)}: <b>${v}</b></span>`).join('');
+ const m=s.measurement;$('reading').innerHTML=m?`${esc(m.grams.toFixed(1))} g <span class="pill">${esc(m.source)}</span> ${m.fresh?'(fresh)':'(stale)'}`:'Waiting for weighing station';
+ $('requests').innerHTML=s.requests.length?s.requests.map(r=>{
+   const proposed=kitLabels(r.proposed),packed=kitLabels(r.kit);
+   const action = r.status==='RECEIVED'?`<button onclick="assign('${r.id}')">Assign &amp; reserve kit</button>`:
+     r.status==='ASSIGNED'?`<button onclick="verify('${r.id}')">Verify checklist + measured weight</button>`:
+     r.status==='VERIFIED'?`<button onclick="advance('${r.id}')">Mark dispatched</button>`:
+     r.status==='DISPATCHED'?`<button onclick="advance('${r.id}')">Mark delivered (simulation)</button>`:'';
+   return `<article class="req"><div class="row"><strong>${esc(r.id)}</strong><span class="pill">${esc(r.status)}</span></div><p class="muted">Area ${esc(r.zone)} · ${r.people} people · ${r.infants} infants · ${r.seniors||0} seniors · ${esc(r.disaster)}</p>
+   <p><b>Medical request:</b> ${esc(r.medicine||'NONE')}${r.medicine_note?' · '+esc(r.medicine_note):''}</p>
+   ${(r.medicine&&r.medicine!=='NONE')?'<p class="error"><b>⚕ HUMAN REVIEW REQUIRED</b> — medicine is not automatically allocated.</p>':''}
+   <p><b>Suggested:</b><br>${proposed}</p>${packed?`<p><b>Assigned:</b><br>${packed}</p>`:''}${r.expected_g!=null?`<p><b>Expected:</b> ${r.expected_g}g (estimated) ${r.last_weight_g!=null?'· <b>Measured:</b> '+r.last_weight_g+'g':''}</p>`:''}<div style="margin-top:12px">${action}</div></article>`
+ }).join(''):'<div class="card"><p>No requests yet. Send one over LoRa, or simulate a packet.</p></div>';
+ }).catch(e=>notice('Cannot reach local server: '+e.message,true))}
+refresh();setInterval(refresh,3000);
+</script></body></html>

@@ -1,0 +1,6 @@
+Family A: RR1|RDEMO101|YEL03|4|1|FLOOD
+Family B: RR1|RDEMO102|YEL04|2|0|QUAKE
+Family C: RR1|RDEMO103|YEL05|5|0|CYCLONE
+Invalid (must reject): RR1|RFAIL101|YEL03|4|5|FLOOD
+Duplicate demo: send same RDEMO101 twice. Warehouse should only save one row.
+The request IDs above may already exist in a persistent database from earlier demo runs; use new IDs or remove demo DB only if you deliberately want a fresh demonstration.

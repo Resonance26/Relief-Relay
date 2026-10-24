@@ -1,0 +1,3 @@
+# No packages required for the offline dashboard and demonstration mode.
+# Only when plugging receiver/scale ESP32 into USB:
+pyserial>=3.5,<4
